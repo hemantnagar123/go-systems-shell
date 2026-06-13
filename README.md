@@ -54,37 +54,19 @@ Operating systems defaults to running terminals in **Canonical (Cooked) Mode**. 
 
 ### Transitioning to Raw Mode
 
-To capture input interactively, the terminal descriptor is shifted into **Raw Mode** using `term.MakeRaw`. This turns off default terminal echo formatting and character preprocessing, feeding raw keystrokes directly into a continuous `os.Stdin.Read` byte interpretation loop.
+Shifting the terminal into **Raw Mode** via `term.MakeRaw` feeds keystrokes directly into `os.Stdin.Read` byte-by-byte. This bypassed automatic OS line-buffering but required handling standard terminal inputs manually:
 
-Bypassing the OS layer solved the interactivity constraints but required manual handling of basic terminal events:
-
-#### 1. The Ctrl+D (EOF) Trap
-
-In canonical mode, pressing `Ctrl+D` causes the terminal driver to emit an empty stream status indicating `io.EOF`. In raw mode, that helper layer vanishes. Instead, `Ctrl+D` triggers a literal, raw ASCII control byte: **Value `4` (End of Transmission)**.
-
-* **The Solution:** The character processing `switch` statement explicitly intercepts byte value `4`. If received while the input array buffer length is exactly zero, it prints a clean line break and forwards a manual `io.EOF` signal up to the caller to smoothly trigger the shell's logging and teardown routines.
-
-#### 2. Re-Engineering Interactive Sequences
-
-With high-level string reading disabled, standard text manipulation behaviors must be handled manually. Backspace keys emit raw byte `127` or `\b`. Arrow keys issue multi-byte ANSI escape sequences starting with a boundary escape character (`27`), followed by a bracket symbol (`[`) and directional flags (`A` for Up, `B` for Down).
-
-* **The Solution:** We constructed custom array index manipulators. When backspace is pressed, the shell drops the last rune from the input array, enters a carriage return (`\r`), outputs the dynamic folder prompt path, rewrites the truncated string, and appends the ANSI terminal sequence `\033[K` to clear out trailing phantom characters from the screen display.
-
+* **The Ctrl+D Trap:** Raw mode captures `Ctrl+D` as the literal ASCII control byte `4` instead of a traditional `io.EOF`. The loop explicitly intercepts this byte on an empty line to forward a manual exit signal.
+* **Manual Line Editing & Escape Sequences:** Backspace keys emit raw byte `127`, and arrow keys send multi-byte ANSI escape sequences (like `\x1b[A` for up-arrow). The shell handles these by updating an internal rune slice and redrawing the terminal line using carriage returns (`\r`) and clearing codes (`\033[K`).
 ---
 
 ## 🛠️ Key Architectural Solutions
 
-### 1. Synchronous Process Polling and Reaping
-
-To prevent background jobs (`&`) from turning into dead zombie processes when they finish executing, the main execution engine needs to regularly track task life cycles. At the start of every instruction prompt loop, the shell runs a tracking method that pings active process IDs using a non-destructive signal check: `p.Signal(syscall.Signal(0))`. If the kernel signals that the process ID has dropped off the table, the state is updated to `Done` and the task is safely cleaned from memory.
-
-### 2. Thread-Safe Job Registry
-
-Because background execution tracking occurs across asynchronous, concurrent Go routines, modifying or viewing background tasks exposes the global state array to race conditions if a user checks running processes while a thread finishes. To ensure absolute data structure integrity, all updates, deletes, and list reads targeting the active background process slice are completely wrapped using a strict mutual exclusion lock (`sync.Mutex`).
-
-### 3. Path Reconstruction Desynchronization
-
-When parsing target completions that include explicit path references (such as `cd ./` or `../`), path-stripping utilities often remove prefix segments to read folder indexes, which can throw off character tracking on the input line. The autocomplete engine solves this by splitting text input to extract directory strings, scanning the targeted system location, and manually re-weaving the typed path prefixes back into the completion arrays before updating the screen.
+* **Zombie Process Reaping:** Pings active background processes at the start of every prompt loop using `p.Signal(syscall.Signal(0))`. This tracks task lifecycles and cleanly removes completed jobs from memory.
+  
+* **Thread-Safe Job Registry:** Protects the shared background jobs array with a `sync.Mutex` to prevent concurrent read/write data races between asynchronous Go routines.
+  
+* **Path Reconstruction:** Tracks typed relative path prefixes (like `./` or `../`) during tab completion, manually re-weaving them into matching outputs to prevent input-line desynchronization.
 
 ---
 
