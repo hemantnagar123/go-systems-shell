@@ -7,8 +7,8 @@ This project explores low-level systems programming, focusing on raw terminal I/
 ## 📺 Demo
 
 > [!TIP]
-> *Replace the placeholder lines below with your own recorded image/GIF links to show your shell in action!*
 
+https://github.com/user-attachments/assets/dbd05a67-ebf0-4c7e-8e12-e3bf8792e7c9
 
 *Context-aware tab completion processing file structures.*
 
