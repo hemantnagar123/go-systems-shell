@@ -8,7 +8,15 @@ This project explores low-level systems programming, focusing on raw terminal I/
 
 > [!TIP]
 
-https://github.com/user-attachments/assets/dbd05a67-ebf0-4c7e-8e12-e3bf8792e7c9
+
+
+
+
+
+
+https://github.com/user-attachments/assets/29ac1163-f10a-47a6-88b2-2d7207c2eee5
+
+
 
 *Context-aware tab completion processing file structures.*
 
